@@ -1,0 +1,43 @@
+name: update profile card
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["*.svg", "data.json"]
+  schedule:
+    - cron: "17 9 * * *"        # diario, 06:17 hora de Chile
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-card
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Recoger estadisticas y regenerar SVGs
+        env:
+          PROFILE_TOKEN: ${{ secrets.PROFILE_TOKEN }}   # PAT de solo lectura: incluye repos privados
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}     # fallback: solo publicos
+        run: |
+          python update_data.py
+          python make_profile.py
+
+      - name: Commit si hay cambios
+        run: |
+          if git diff --quiet; then echo "sin cambios"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.json dark_mode.svg light_mode.svg
+          git commit -m "chore: update card data"
+          git push
